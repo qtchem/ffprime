@@ -1,4 +1,6 @@
 from ffprime.utils.part import Partitioning
+from ffprime.nonbonding.vdw import ts_parameters
+from ffprime.nonbonding.parameters import lj_parameters
 from atomdb import Element
 import os
 import numpy as np
@@ -42,14 +44,8 @@ class Nonbonded:
         epsilon = np.zeros(n)
 
         # Compute FF parameters
-        for i, atnum in enumerate(atnums):
-            volume_ratios[i] = atvolumes[i] / ref_atvolumes[i]
-
-            c6s_eff[i] = (volume_ratios[i])**2 * Element(atnum).c6["chu"]
-            a_eff[i]  = (volume_ratios[i])    * Element(atnum).pold["chu"]
-
-            sigma[i] = (5.08 * a_eff[i]**(1/7)) / (2**(1/6)) / nanometer
-            epsilon[i] = c6s_eff[i] / (2 * (5.08 * a_eff[i]**(1/7))**6) / kjmol
+        c6s, a_eff, volume_ratios = ts_parameters(atnums, atvolumes, ref_atvolumes)
+        sigma, epsilon = lj_parameters(c6s, a_eff)
 
         # Store computed parameters
         self.atnums = atnums
