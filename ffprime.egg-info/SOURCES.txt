@@ -10,4 +10,9 @@ ffprime.egg-info/dependency_links.txt
 ffprime.egg-info/entry_points.txt
 ffprime.egg-info/requires.txt
 ffprime.egg-info/top_level.txt
+tests/test_analysis.py
+tests/test_cartesian_quadrupole_field.py
+tests/test_multipole.py
 tests/test_nb.py
+tests/test_path_equivalence.py
+tests/test_spherical.py
