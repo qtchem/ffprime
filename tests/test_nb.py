@@ -2,42 +2,65 @@ import numpy as np
 import pytest
 from ffprime.nb import Nonbonded
 
-
 # ---------------------------------------------------------------------
 # Derived fixtures (avoid recomputation)
 # ---------------------------------------------------------------------
 
+
+# @pytest.fixture(scope="session")
+# def nb_from_iodata(lig_mol, schemes, pro_level):
+#     return Nonbonded.from_IODATA(
+#         lig_mol,
+#         schemes=schemes,
+#         args="insane",
+#         pro_level=pro_level,
+#     )
+
+
+# @pytest.fixture(scope="session")
+# def nb_from_fchk_file(lig_fchk, schemes, pro_level):
+#     return Nonbonded.from_file(
+#         fname=str(lig_fchk),
+#         schemes=schemes,
+#         args="insane",
+#         pro_level=pro_level,
+#     )
+
+
+# @pytest.fixture(scope="session")
+# def nb_from_molden_file(lig_molden, schemes, pro_level):
+#     return Nonbonded.from_file(
+#         fname=str(lig_molden),
+#         schemes=schemes,
+#         args="insane",
+#         pro_level=pro_level,
+#     )
+
+
 @pytest.fixture(scope="session")
-def nb_from_iodata(lig_mol, schemes, pro_level):
+def nb_from_iodata(water_mol, schemes, pro_level):
     return Nonbonded.from_IODATA(
-        lig_mol,
+        water_mol,
         schemes=schemes,
-        args="insane",
+        args="fine",
         pro_level=pro_level,
     )
 
 
 @pytest.fixture(scope="session")
-def nb_from_file(lig_fchk, schemes, pro_level):
+def nb_from_file(water_fchk, schemes, pro_level):
     return Nonbonded.from_file(
-        fname=str(lig_fchk),
+        fname=str(water_fchk),
         schemes=schemes,
-        args="insane",
+        args="fine",
         pro_level=pro_level,
     )
 
-@pytest.fixture(scope="session")
-def nb_from_file(lig_molden, schemes, pro_level):
-    return Nonbonded.from_file(
-        fname=str(lig_molden),
-        schemes=schemes,
-        args="insane",
-        pro_level=pro_level,
-    )
 
 # ---------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------
+
 
 def test_from_file_creates_nonbonded(nb_from_file):
     nb = nb_from_file
@@ -66,7 +89,7 @@ def test_from_iodata_populates_atffparams_and_extra(nb_from_iodata):
         assert isinstance(mol.atffparams[key], np.ndarray)
 
     # Extra parameters
-    for key in ["ref_atvolumes", "volume_ratios", "c6s_eff", "a_eff"]:
+    for key in ["atvolumes", "ref_atvolumes", "volume_ratios", "c6s_eff", "a_eff"]:
         assert key in mol.extra
         assert isinstance(mol.extra[key], np.ndarray)
 
@@ -112,7 +135,7 @@ def test_volume_ratios_consistent(nb_from_iodata):
     vols = nb_from_iodata.extra["volume_ratios"]
 
     assert (vols > 0).all()
-    assert (vols < 10).all()   # very loose upper bound
+    assert (vols < 10).all()  # very loose upper bound
 
 
 def test_write_npz(tmp_path, nb_from_file):
@@ -123,5 +146,3 @@ def test_write_npz(tmp_path, nb_from_file):
 
     for key in ["sigma", "epsilon", "atcharges"]:
         assert key in data
-
-

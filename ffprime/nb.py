@@ -1,6 +1,8 @@
 from ffprime.utils.part import Partitioning
 from ffprime.nonbonding.vdw import ts_parameters
 from ffprime.nonbonding.parameters import lj_parameters
+from ffprime.nonbonding.utils import compute_volumes
+from ffprime.electrostatics.utils import compute_cartesian_atomic_moments
 from atomdb import Element
 import os
 import numpy as np
@@ -10,11 +12,8 @@ from gbasis.evals.density import evaluate_density
 from grid import GaussChebyshev, BeckeRTransform, MolGrid, BeckeWeights
 from iodata import load_one
 
-
-meter: float = 1 / spc.value('Bohr radius')
-nanometer: float = 1e-9 * meter
-kjmol: float = 1e3 / spc.value('Avogadro constant') / spc.value('Hartree energy')
 __all__ = ["Nonbonded"]
+
 
 class Nonbonded:
     def __init__(self, atnums=None, atcharges=None, atvolumes=None, ref_atvolumes=None):
@@ -58,13 +57,10 @@ class Nonbonded:
         self.sigma = sigma
         self.epsilon = epsilon
 
-
-   
     #  ---- Option 1: Load from file ----
-  
+
     @classmethod
-    def from_file(cls, fname, schemes, args=None, pro_level=None,
-                  pro_charge=[-2,2]):
+    def from_file(cls, fname, schemes, args=None, pro_level=None, pro_charge=[-2, 2]):
 
         self = cls()
 
@@ -99,13 +95,10 @@ class Nonbonded:
         print(f"\nEnd PART for {len(self.molecules)} molecules and {len(self.schemes)} schemes.\n")
         return self
 
-
-  
     # Option 2: Load an IOData molecule
-   
+
     @classmethod
-    def from_IODATA(cls, mol, schemes, args=None, pro_level=None,
-                    pro_charge=[-2,2]):
+    def from_IODATA(cls, mol, schemes, args=None, pro_level=None, pro_charge=[-2, 2]):
 
         self = cls()
 
@@ -131,10 +124,18 @@ class Nonbonded:
 
         # fields that go into atffparams
         ff_fields = ["atcharges", "sigma", "epsilon"]
-        ff_extra = ['ref_atvolumes', 'volume_ratios', 'c6s_eff', 'a_eff', 'atdipoles', 'atquadrupoles']
+        ff_extra = [
+            "atvolumes",
+            "ref_atvolumes",
+            "volume_ratios",
+            "c6s_eff",
+            "a_eff",
+            "atdipoles",
+            "atquadrupoles",
+        ]
 
         for key, val in results.items():
-        # Convert lists → numpy arrays for consistency
+            # Convert lists → numpy arrays for consistency
             if isinstance(val, list):
                 val = np.array(val)
 
@@ -149,22 +150,20 @@ class Nonbonded:
 
         return mol
 
+    # Internal utility method to store more than one molecule
 
-   
-    # Internal utility method to store more than one molecule 
-   
     def _register_molecule(self, mol):
         """Register a molecule in the class lists."""
         self.molecules.append(mol)
         self.unique_atnums.extend(mol.atnums.tolist())
         self.unique_atnums = sorted(set(self.unique_atnums))
 
-
     def _process_molecule(self, mol, method):
+        print(f"PREPARE molecule ({len(mol.atnums)} atoms)")
         """Run partitioning and compute nonbonded parameters for the molecule."""
         rdm = mol.one_rdms.get("scf")
 
-        # Build density matrix 
+        # Build density matrix
         if rdm is None:
             if mol.mo is None:
                 print("Missing mol.mo ! Density matrix...")
@@ -174,26 +173,21 @@ class Nonbonded:
             coeffs, occs = mol.mo.coeffs, mol.mo.occs
             rdm = np.dot(coeffs * occs, coeffs.T)
         basis = from_iodata(mol)
-        
 
-        print(f"PREPARE molecule ({len(mol.atnums)} atoms)")
-
-        if method == "mbis":
-            oned = GaussChebyshev(npoints=100)
-            rgrid = BeckeRTransform(0.0, R=1.5).transform_1d_grid(oned)
-            grid = MolGrid.from_preset(
-                atnums=mol.atnums,
-                atcoords=mol.atcoords,
-                rgrid=rgrid,
-                preset=self.agspec,
-                aim_weights=BeckeWeights(),
-                store=True,
-            )
-            moldens = evaluate_density(rdm, basis, grid.points)
+        oned = GaussChebyshev(npoints=100)
+        rgrid = BeckeRTransform(0.0, R=1.5).transform_1d_grid(oned)
+        grid = MolGrid.from_preset(
+            atnums=mol.atnums,
+            atcoords=mol.atcoords,
+            rgrid=rgrid,
+            preset=self.agspec,
+            aim_weights=BeckeWeights(),
+            store=True,
+        )
+        moldens = evaluate_density(rdm, basis, grid.points)
 
         # Run partitioning
-        print(f"PART {method.upper()} ...")
-
+        print(f"PARTITION {method.upper()} ...")
         part_job = Partitioning(
             method,
             mol,
@@ -203,27 +197,55 @@ class Nonbonded:
             self.unique_atnums,
             self.pro_level,
             molecule_iodata=self.molecules_iodata,
-            )
-        part = part_job.compute()
+        )
+        pro_model, localgrids = part_job.compute()
+
+        print(f"COMPUTE Electrostatics and Nonbonded Parameters for {len(mol.atnums)} atoms ...")
+        # Compute volumes\
+        ref_atvolumes, atvolumes = compute_volumes(
+            mol.atnums, self.unique_atnums, pro_model, grid, moldens, localgrids
+        )
+
+        print(f"ref_atvolumes: {ref_atvolumes}")
+        print(f"atvolumes: {atvolumes}")
+
+        # Compute electrostatic multipoles
+        atcharges = pro_model.charges
+        cartesian_moments = compute_cartesian_atomic_moments(pro_model, grid, moldens, localgrids)
+        atdipoles, atquads = cartesian_moments[:, 1:4], cartesian_moments[:, 4:]
+
+        print(f"atcharges: {atcharges}")
+        print(f"atdipoles: {atdipoles}")
+        print(f"atquads: {atquads}")
+
+        # Compute nonbonded parameters
+        c6s_eff, a_eff, volume_ratios = ts_parameters(mol.atnums, atvolumes, ref_atvolumes)
+        sigma, epsilon = lj_parameters(c6s_eff, a_eff)
+
+        print(f"volume_ratios: {volume_ratios}")
+        print(f"c6s_eff: {c6s_eff}")
+        print(f"a_eff: {a_eff}")
+        print(f"sigma: {sigma}")
+        print(f"epsilon: {epsilon}")
 
         # Output dict to apply to self or IOData
         return {
             "atnums": mol.atnums,
             "atcoords": mol.atcoords,
-            "atcharges": part.charges,
-            "atdipoles": part.atdipoles,
-            "atquadrupoles": part.atquadrupoles,
-            "ref_atvolumes": part.ref_volumes,
-            "volume_ratios": part.volume_ratios,
-            "c6s_eff": part.c6s,
-            "a_eff": part.alpha,
-            "sigma": part.sigma,
-            "epsilon": part.epsilon,
+            "atcharges": atcharges,
+            "atdipoles": atdipoles,
+            "atquadrupoles": atquads,
+            "atvolumes": atvolumes,
+            "ref_atvolumes": ref_atvolumes,
+            "volume_ratios": volume_ratios,
+            "c6s_eff": c6s_eff,
+            "a_eff": a_eff,
+            "sigma": sigma,
+            "epsilon": epsilon,
         }
-    
-    
+
     # Save all nonbonded parameters as a NPZ file
-    
+
     def write_npz(self, filename, verbose=True):
         """
         Save only safe numeric nonbonded data to a .npz file.
@@ -272,6 +294,3 @@ class Nonbonded:
 
         if verbose:
             print(f"\n[OK] Nonbonded parameters saved to {filename}\n")
-
-
-

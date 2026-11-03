@@ -1,4 +1,5 @@
 from atomdb import Element
+import numpy as np
 
 
 def ts_parameters(atnums, atvolumes, ref_atvolumes):
@@ -36,13 +37,17 @@ def ts_parameters(atnums, atvolumes, ref_atvolumes):
     while static polarizabilities scale linearly.
     """
     volume_ratios = np.array([atvolumes[i] / ref_atvolumes[i] for i in range(len(atnums))])
-    c6s_eff = np.array([(volume_ratios[i])**2 * Element(atnum).c6["chu"] for i, atnum in enumerate(atnums)])
-    a_eff = np.array([(volume_ratios[i]) * Element(atnum).pold["chu"] for i, atnum in enumerate(atnums)])
+    c6s_eff = np.array(
+        [(volume_ratios[i]) ** 2 * Element(atnum).c6["chu"] for i, atnum in enumerate(atnums)]
+    )
+    a_eff = np.array(
+        [(volume_ratios[i]) * Element(atnum).pold["chu"] for i, atnum in enumerate(atnums)]
+    )
 
     return c6s_eff, a_eff, volume_ratios
+
 
 def xdm_parameters(dens, atvolumes, ref_atvolumes):
     """Compute XDM dispersion parameters for a set of atoms.
     ..math::"""
     return print("not implemented yet")
-    
