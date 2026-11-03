@@ -6,7 +6,7 @@ KJMOL_TO_HARTREE = spc.kilo / (spc.Avogadro * spc.value("Hartree energy"))
 
 def lj_parameters(c6s_eff, a_eff):
     """
-    Compute Lennard-Jones parameters from Tkatchenko-Scheffler dispersion parameters.
+    Compute Lennard-Jones parameters from C6s and atomic polarizabilities.
 
     Parameters
     ----------
