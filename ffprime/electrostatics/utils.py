@@ -67,7 +67,7 @@ def compute_displacement(coords, points):
         Displacement vectors ``points[m] - coords[n]``.
     r : np.ndarray, shape (M, N)
         Euclidean distances corresponding to ``r_vecs``.
-    safe_r : np.ndarray, shape (M, N)-
+    safe_r : np.ndarray, shape (M, N)
         ``r`` with near-zero entries replaced by ``inf``.
     """
     coords = np.asarray(coords)
