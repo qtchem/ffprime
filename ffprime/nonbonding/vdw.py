@@ -114,8 +114,8 @@ class XDMParameters:
                 x = x1
 
             # Compute a and b from x
-            b = ((x**3.0) * np.exp(-x) / (8 * np.pi * dens)) ** (1.0 / 3.0)
-            a = x / b
+            a = ((8 * np.pi * dens) / np.exp(-x)) ** (1.0 / 3.0)
+            b = x / a
             # print(f"Returning computed b={b}")
             return a, b
 
