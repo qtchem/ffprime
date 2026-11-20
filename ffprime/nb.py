@@ -1,5 +1,5 @@
 from ffprime.utils.part import Partitioning
-from ffprime.nonbonding.vdw import ts_parameters
+from ffprime.nonbonding.vdw import TSParameters, XDMParameters
 from ffprime.nonbonding.parameters import lj_parameters
 from ffprime.nonbonding.utils import compute_volumes
 from ffprime.electrostatics.utils import compute_cartesian_atomic_moments
@@ -16,7 +16,7 @@ __all__ = ["Nonbonded"]
 
 
 class Nonbonded:
-    def __init__(self, atnums=None, atcharges=None, atvolumes=None, ref_atvolumes=None):
+    def __init__(self, atnums=None, atcharges=None, atvolumes=None, ref_atvolumes=None, disp="ts"):
         """
         If atomic data are provided, compute the derived nonbonded parameters.
         Otherwise create an "empty" Nonbonded container that can be filled later.
@@ -43,7 +43,14 @@ class Nonbonded:
         epsilon = np.zeros(n)
 
         # Compute FF parameters
-        c6s, a_eff, volume_ratios = ts_parameters(atnums, atvolumes, ref_atvolumes)
+        if disp == "ts":
+            c6s, a_eff, volume_ratios = TSParameters.ts_parameters(atnums, atvolumes, ref_atvolumes)
+        elif disp == "xdm":
+            c6s, a_eff, volume_ratios = XDMParameters.xdm_parameters(
+                atnums, atvolumes, ref_atvolumes
+            )
+        else:
+            raise ValueError("Invalid dispersion method. Choose 'ts' or 'xdm'.")
         sigma, epsilon = lj_parameters(c6s, a_eff)
 
         # Store computed parameters
@@ -158,7 +165,7 @@ class Nonbonded:
         self.unique_atnums.extend(mol.atnums.tolist())
         self.unique_atnums = sorted(set(self.unique_atnums))
 
-    def _process_molecule(self, mol, method):
+    def _process_molecule(self, mol, method, disp="ts"):
         print(f"PREPARE molecule ({len(mol.atnums)} atoms)")
         """Run partitioning and compute nonbonded parameters for the molecule."""
         rdm = mol.one_rdms.get("scf")
@@ -219,7 +226,17 @@ class Nonbonded:
         print(f"atquads: {atquads}")
 
         # Compute nonbonded parameters
-        c6s_eff, a_eff, volume_ratios = ts_parameters(mol.atnums, atvolumes, ref_atvolumes)
+        if disp == "ts":
+            c6s_eff, a_eff, volume_ratios = TSParameters.ts_parameters(
+                mol.atnums, atvolumes, ref_atvolumes
+            )
+        elif disp == "xdm":
+            c6s_eff, a_eff, volume_ratios = XDMParameters.xdm_parameters(
+                mol.atnums, atvolumes, ref_atvolumes
+            )
+        else:
+            raise ValueError("Invalid dispersion method. Choose 'ts' or 'xdm'.")
+
         sigma, epsilon = lj_parameters(c6s_eff, a_eff)
 
         print(f"volume_ratios: {volume_ratios}")
